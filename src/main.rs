@@ -87,17 +87,10 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             continue;
         }
         if sprite.label.starts_with("shot") {
-            let (shot_direction_x, shot_direction_y) =
-                if sprite.rotation < FRAC_PI_2 || sprite.rotation > (3.0 * FRAC_PI_2) {
-                    (1.0, 1.0)
-                } else if sprite.rotation > FRAC_PI_2 || sprite.rotation < PI {
-                    (-1.0, 1.0)
-                } else {
-                    (1.0, -1.0)
-                };
-            sprite.translation.x += SHOT_SPEED * engine.delta_f32 * shot_direction_x;
-            sprite.translation.y =
-                (sprite.rotation as f64).tan() as f32 * sprite.translation.x * shot_direction_y;
+            sprite.translation.x +=
+                SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+            sprite.translation.y +=
+                SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).sin() as f32;
         }
     }
 }
