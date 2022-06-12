@@ -1,14 +1,15 @@
 use bevy::prelude::Timer;
 use bevy::utils::Duration;
+use rusty_asteroids::speed::Speed;
 use rusty_engine::prelude::*;
-use std::f32::consts::{FRAC_PI_2, PI, TAU};
-
+use std::f32::consts::TAU;
 const SHOT_SPEED: f32 = 100.0;
 const RELOAD_TIME: u64 = 150;
 
 struct GameState {
     shot_counter: u32,
     shot_timer: Timer,
+    speed: Speed,
 }
 
 impl Default for GameState {
@@ -16,6 +17,7 @@ impl Default for GameState {
         Self {
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
+            speed: Speed::new(),
         }
     }
 }
@@ -51,15 +53,17 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     if engine.keyboard_state.pressed(KeyCode::Space) && game_state.shot_timer.finished() {
         shoot = true;
         game_state.shot_timer.reset();
-    } else if engine.keyboard_state.pressed(KeyCode::Up) {
+    } else if engine.keyboard_state.pressed(KeyCode::Left) {
         // Deal with positive rotation overflow
         player.rotation = (player.rotation + 0.05) % TAU;
-    } else if engine.keyboard_state.pressed(KeyCode::Down) {
+    } else if engine.keyboard_state.pressed(KeyCode::Right) {
         player.rotation -= 0.05;
         // Deal with negative rotation overflow
         if player.rotation < 0.0 {
             player.rotation = TAU - player.rotation
         };
+    } else if engine.keyboard_state.pressed(KeyCode::Up) {
+        // Add thrust force
     }
 
     // Generate a shot
