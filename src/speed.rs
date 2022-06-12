@@ -1,7 +1,9 @@
 const THRUST_SPEED: f32 = 10.0;
+const THRUST_DECAY: f32 = THRUST_SPEED * 0.1;
 
 // A burst of the rockets will create thrust,
 // i.e a speed force in the point of direction.
+#[derive(Clone, Copy)]
 struct Thrust {
     speed: f32,
     rotation: f32,
@@ -35,6 +37,16 @@ impl Speed {
     pub fn give_thrust(&mut self, rotation: f32) {
         self.add(THRUST_SPEED, rotation);
     }
+    pub fn decay_thrust(&mut self) {
+        self.subtract(THRUST_DECAY);
+    }
+    pub fn len(&mut self) -> u32 {
+        let mut len = 0;
+        for _ in &mut self.speed {
+            len += 1;
+        }
+        len
+    }
     pub fn exists(&mut self, rotation: f32) -> bool {
         let mut exists = false;
         for x in &mut self.speed {
@@ -58,6 +70,13 @@ impl Speed {
             let thrust = Thrust::new(speed, rotation);
             self.speed.push(thrust);
         }
+    }
+    // Subtract speed from all existing Thrust vectors.
+    pub fn subtract(&mut self, speed: f32) {
+        for thrust in &mut self.speed {
+            thrust.speed -= speed;
+        }
+        self.speed.retain(|&x| x.speed < 0.0);
     }
 }
 

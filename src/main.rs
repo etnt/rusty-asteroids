@@ -3,14 +3,16 @@ use bevy::utils::Duration;
 use rusty_asteroids::speed::Speed;
 use rusty_engine::prelude::*;
 use std::f32::consts::TAU;
-const SHOT_SPEED: f32 = 100.0;
+const SHOT_SPEED: f32 = 200.0;
 const RELOAD_TIME: u64 = 150;
 const THRUST_TIME: u64 = 200;
+const DECAY_TIME: u64 = 10000;
 
 struct GameState {
     shot_counter: u32,
     shot_timer: Timer,
     thrust_timer: Timer,
+    decay_timer: Timer,
     speed: Speed,
 }
 
@@ -20,6 +22,7 @@ impl Default for GameState {
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
             thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
+            decay_timer: Timer::new(Duration::from_millis(DECAY_TIME), false),
             speed: Speed::new(),
         }
     }
@@ -46,10 +49,19 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // Update the timers.
     game_state.shot_timer.tick(engine.delta);
     game_state.thrust_timer.tick(engine.delta);
+    game_state.decay_timer.tick(engine.delta);
+
+    // Let gravity and stuff have a go at it,
+    // i.e let's garbage collect the Thrust components
+    if game_state.decay_timer.finished() {
+        game_state.speed.decay_thrust();
+        game_state.decay_timer.reset();
+    }
 
     // Get hold of the Player info.
     let player = engine.sprites.get_mut("player").unwrap();
     let player_x = player.translation.x;
+    let player_y = player.translation.y;
     let player_rotation = player.rotation;
     let mut shoot = false;
     let mut give_thrust = false;
@@ -76,7 +88,6 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     if give_thrust {
         game_state.speed.give_thrust(player_rotation);
     }
-
     // Move the player
     let (x, y) = game_state.speed.calculate_movement();
     player.translation.x += x * engine.delta_f32;
@@ -110,6 +121,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         );
         sprite.scale = 0.1;
         sprite.translation.x = player_x;
+        sprite.translation.y = player_y;
         sprite.rotation = player_rotation;
         sprite.collision = true;
     }
