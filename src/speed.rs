@@ -22,6 +22,19 @@ impl Speed {
     pub fn new() -> Self {
         Self { speed: Vec::new() }
     }
+    pub fn calculate_movement(&self) -> (f32, f32) {
+        let mut x = 0.0;
+        let mut y = 0.0;
+
+        for thrust in &self.speed {
+            x += thrust.speed * (thrust.rotation as f64).cos() as f32;
+            y += thrust.speed * (thrust.rotation as f64).sin() as f32;
+        }
+        (x, y)
+    }
+    pub fn give_thrust(&mut self, rotation: f32) {
+        self.add(THRUST_SPEED, rotation);
+    }
     pub fn exists(&mut self, rotation: f32) -> bool {
         let mut exists = false;
         for x in &mut self.speed {
@@ -32,7 +45,7 @@ impl Speed {
         exists
     }
     // Add speed to an already existing Thrust vector,
-    //  or else add a new Thrust vector.
+    // or else add a new Thrust vector.
     pub fn add(&mut self, speed: f32, rotation: f32) {
         let mut is_new = true;
         for thrust in &mut self.speed {

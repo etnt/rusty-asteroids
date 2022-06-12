@@ -5,10 +5,12 @@ use rusty_engine::prelude::*;
 use std::f32::consts::TAU;
 const SHOT_SPEED: f32 = 100.0;
 const RELOAD_TIME: u64 = 150;
+const THRUST_TIME: u64 = 200;
 
 struct GameState {
     shot_counter: u32,
     shot_timer: Timer,
+    thrust_timer: Timer,
     speed: Speed,
 }
 
@@ -17,6 +19,7 @@ impl Default for GameState {
         Self {
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
+            thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
             speed: Speed::new(),
         }
     }
@@ -40,14 +43,16 @@ fn main() {
 fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // game logic goes here
     //
-    // Update the shot reload timer.
+    // Update the timers.
     game_state.shot_timer.tick(engine.delta);
+    game_state.thrust_timer.tick(engine.delta);
 
     // Get hold of the Player info.
     let player = engine.sprites.get_mut("player").unwrap();
     let player_x = player.translation.x;
     let player_rotation = player.rotation;
     let mut shoot = false;
+    let mut give_thrust = false;
 
     // Keyboard handling
     if engine.keyboard_state.pressed(KeyCode::Space) && game_state.shot_timer.finished() {
@@ -62,22 +67,20 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         if player.rotation < 0.0 {
             player.rotation = TAU - player.rotation
         };
-    } else if engine.keyboard_state.pressed(KeyCode::Up) {
-        // Add thrust force
+    } else if engine.keyboard_state.pressed(KeyCode::Up) && game_state.thrust_timer.finished() {
+        give_thrust = true;
+        game_state.thrust_timer.reset();
     }
 
-    // Generate a shot
-    if shoot {
-        game_state.shot_counter += 1;
-        let sprite = engine.add_sprite(
-            format!("shot{}", game_state.shot_counter),
-            SpritePreset::RollingBallRed,
-        );
-        sprite.scale = 0.1;
-        sprite.translation.x = player_x;
-        sprite.rotation = player_rotation;
-        sprite.collision = true;
+    // Give thrust
+    if give_thrust {
+        game_state.speed.give_thrust(player_rotation);
     }
+
+    // Move the player
+    let (x, y) = game_state.speed.calculate_movement();
+    player.translation.x += x * engine.delta_f32;
+    player.translation.y += y * engine.delta_f32;
 
     // Move the shots
     for sprite in engine.sprites.values_mut() {
@@ -96,5 +99,18 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             sprite.translation.y +=
                 SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).sin() as f32;
         }
+    }
+
+    // Generate a new shot
+    if shoot {
+        game_state.shot_counter += 1;
+        let sprite = engine.add_sprite(
+            format!("shot{}", game_state.shot_counter),
+            SpritePreset::RollingBallRed,
+        );
+        sprite.scale = 0.1;
+        sprite.translation.x = player_x;
+        sprite.rotation = player_rotation;
+        sprite.collision = true;
     }
 }
