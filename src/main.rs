@@ -114,5 +114,6 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         sprite.translation.y = player_y;
         sprite.rotation = player_rotation;
         sprite.collision = true;
+        engine.audio_manager.play_sfx(SfxPreset::Impact1, 0.4);
     }
 }
