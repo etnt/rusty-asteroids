@@ -1,19 +1,17 @@
 use bevy::prelude::Timer;
 use bevy::utils::Duration;
-use rusty_asteroids::speed::Speed;
 use rusty_engine::prelude::*;
 use std::f32::consts::TAU;
 const SHOT_SPEED: f32 = 200.0;
 const RELOAD_TIME: u64 = 150;
 const THRUST_TIME: u64 = 200;
-const DECAY_TIME: u64 = 10000;
+const THRUST_SPEED: f32 = 10.0;
 
 struct GameState {
     shot_counter: u32,
     shot_timer: Timer,
     thrust_timer: Timer,
-    decay_timer: Timer,
-    speed: Speed,
+    speed: Vec2,
 }
 
 impl Default for GameState {
@@ -22,8 +20,7 @@ impl Default for GameState {
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
             thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
-            decay_timer: Timer::new(Duration::from_millis(DECAY_TIME), false),
-            speed: Speed::new(),
+            speed: Vec2::new(0.0, 0.0),
         }
     }
 }
@@ -33,6 +30,7 @@ fn main() {
 
     // game setup goes here
 
+    //let player = game.add_sprite("player", "kenny/Retina/ship_A.png");
     let player = game.add_sprite("player", SpritePreset::RacingCarBlue);
     player.translation = Vec2::new(0.0, 0.0);
     player.rotation = RIGHT;
@@ -49,14 +47,6 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // Update the timers.
     game_state.shot_timer.tick(engine.delta);
     game_state.thrust_timer.tick(engine.delta);
-    game_state.decay_timer.tick(engine.delta);
-
-    // Let gravity and stuff have a go at it,
-    // i.e let's garbage collect the Thrust components
-    if game_state.decay_timer.finished() {
-        game_state.speed.decay_thrust();
-        game_state.decay_timer.reset();
-    }
 
     // Get hold of the Player info.
     let player = engine.sprites.get_mut("player").unwrap();
@@ -86,12 +76,12 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
 
     // Give thrust
     if give_thrust {
-        game_state.speed.give_thrust(player_rotation);
+        game_state.speed.x += THRUST_SPEED * (player_rotation as f64).cos() as f32;
+        game_state.speed.y += THRUST_SPEED * (player_rotation as f64).sin() as f32;
     }
     // Move the player
-    let (x, y) = game_state.speed.calculate_movement();
-    player.translation.x += x * engine.delta_f32;
-    player.translation.y += y * engine.delta_f32;
+    player.translation.x += game_state.speed.x * engine.delta_f32;
+    player.translation.y += game_state.speed.y * engine.delta_f32;
 
     // Move the shots
     for sprite in engine.sprites.values_mut() {
