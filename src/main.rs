@@ -12,6 +12,7 @@ struct GameState {
     shot_timer: Timer,
     thrust_timer: Timer,
     speed: Vec2,
+    sprites_to_delete: Vec<String>,
 }
 
 impl Default for GameState {
@@ -21,6 +22,7 @@ impl Default for GameState {
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
             thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
             speed: Vec2::new(0.0, 0.0),
+            sprites_to_delete: Vec::new(),
         }
     }
 }
@@ -91,8 +93,18 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             || sprite.translation.x > 800.0
             || sprite.translation.x < -800.0
         {
-            // FIXME remove the sprite
-            continue;
+            // Explanation found in the `Car Shoot` scenario:
+            //
+            // We can't modify a hash map of sprites while we're
+            // looping through its values, so let's create an
+            // empty vector of strings and fill it with labels
+            // of sprites that we want to delete. Once we're
+            // done examining the hash map, we can loop through
+            // the vector of labels and remove those hash map entries.
+            if sprite.label.starts_with("shot") {
+                game_state.sprites_to_delete.push(sprite.label.clone());
+                continue;
+            }
         }
         if sprite.label.starts_with("shot") {
             sprite.translation.x +=
@@ -101,6 +113,12 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
                 SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).sin() as f32;
         }
     }
+
+    // Remove the sprites.
+    for sprite_to_delete in &game_state.sprites_to_delete {
+        engine.sprites.remove(sprite_to_delete);
+    }
+    game_state.sprites_to_delete.drain(..);
 
     // Generate a new shot
     if shoot {
