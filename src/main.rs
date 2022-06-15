@@ -10,21 +10,33 @@ const THRUST_SPEED: f32 = 10.0;
 const METEOROID_SPEED: f32 = 50.0;
 
 struct GameState {
+    stop: bool,
+    meteoroids: Vec<String>,
     shot_counter: u32,
     shot_timer: Timer,
     thrust_timer: Timer,
     speed: Vec2,
     sprites_to_delete: Vec<String>,
+    pub max_x: f32,
+    pub min_x: f32,
+    pub max_y: f32,
+    pub min_y: f32,
 }
 
 impl Default for GameState {
     fn default() -> Self {
         Self {
+            stop: false,
+            meteoroids: Vec::new(),
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
             thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
             speed: Vec2::new(0.0, 0.0),
             sprites_to_delete: Vec::new(),
+            max_x: 720.0,
+            min_x: -720.0,
+            max_y: 360.0,
+            min_y: -360.0,
         }
     }
 }
@@ -33,10 +45,17 @@ fn main() {
     let mut game = Game::new();
 
     // game setup goes here
-    let delta_x = game.window_dimensions.x / 2.0;
-    let delta_y = game.window_dimensions.y / 2.0;
+    let width: f32 = 1280.0;    // FIXME read Width x Height from somewhere
+    let height: f32 = 720.0;
 
-    //let player = game.add_sprite("player", "kenny/Retina/ship_A.png");
+    let mut game_state = GameState {
+        max_x: width / 2.0,
+        min_x: - width / 2.0,
+        max_y: height / 2.0,
+        min_y: - height / 2.0,
+        ..Default::default()
+    };
+
     let player = game.add_sprite("player", SpritePreset::RacingCarBlue);
     player.translation = Vec2::new(0.0, 0.0);
     player.rotation = RIGHT;
@@ -49,6 +68,10 @@ fn main() {
         SpritePreset::RollingBlockNarrow,
         SpritePreset::RollingBlockSmall,
         SpritePreset::RollingBlockSquare,
+        SpritePreset::RollingBlockCorner,
+        SpritePreset::RollingBlockNarrow,
+        SpritePreset::RollingBlockSmall,
+        SpritePreset::RollingBlockSquare,
     ];
     for (i, meteoroid) in meteoroids.into_iter().enumerate() {
         let sprite = game.add_sprite(format!("meteoroid{}", i), meteoroid);
@@ -56,17 +79,44 @@ fn main() {
         sprite.collision = true;
         sprite.scale = thread_rng().gen_range(0.1..1.0);
         sprite.rotation = thread_rng().gen_range(0.0..TAU);
-        sprite.translation.x = thread_rng().gen_range(-100.0..300.0);
-        sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
+
+        // Save the name of the Meteoroid so that we can keep
+        // track of when all of them are gone.
+        game_state.meteoroids.push(sprite.label.clone());
+
+        // Avoid starting too close to the player, so let's
+        // continue to generate a random position until it
+        // is enough far away from the Player.
+        let mut x = 0.0;
+        let mut y = 0.0;
+        'random: loop {
+            x = thread_rng().gen_range(game_state.min_x..game_state.max_x);
+            y = thread_rng().gen_range(game_state.min_y..game_state.max_y);
+            if !(-30.0..30.0).contains(&x) && !(-30.0..30.0).contains(&y) {
+                break 'random;
+            }
+        }
+        sprite.translation.x = x;
+        sprite.translation.y = y;
     }
 
     game.add_logic(game_logic);
-    game.run(GameState::default());
+    game.run(game_state);
 }
 
 fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // game logic goes here
-    //
+
+    if game_state.stop {
+        return;
+    }
+
+    let mut game_over = false;
+    let max_x = game_state.max_x;
+    let min_x = game_state.min_x;
+    let max_y = game_state.max_y;
+    let min_y = game_state.min_y;
+
     // Update the timers.
     game_state.shot_timer.tick(engine.delta);
     game_state.thrust_timer.tick(engine.delta);
@@ -103,6 +153,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
         game_state.speed.x += THRUST_SPEED * (player_rotation as f64).cos() as f32;
         game_state.speed.y += THRUST_SPEED * (player_rotation as f64).sin() as f32;
     }
+
     // Move the player
     player.translation.x += game_state.speed.x * engine.delta_f32;
     player.translation.y += game_state.speed.y * engine.delta_f32;
@@ -135,22 +186,26 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
                 SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).sin() as f32;
         }
         if sprite.label.starts_with("meteoroid") {
-            sprite.translation.x += METEOROID_SPEED * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
-            sprite.translation.y += METEOROID_SPEED * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+            let speed = METEOROID_SPEED * thread_rng().gen_range(0.5..1.5) as f32;
+            sprite.translation.x += speed * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+            sprite.translation.y += speed * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
             // bounds check, out on left side -> new random position
-            if sprite.translation.x < -800.0 {
-                sprite.translation.x = thread_rng().gen_range(800.0..1600.0);
-                sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
+            if sprite.translation.x < min_x || sprite.translation.x > max_x || sprite.translation.y < min_y || sprite.translation.y > max_y {
+                let mut x = 0.0;
+                let mut y = 0.0;
+                'random: loop {
+                    x = thread_rng().gen_range(game_state.min_x..game_state.max_x);
+                    y = thread_rng().gen_range(game_state.min_y..game_state.max_y);
+                    // avoid starting too close to the player
+                    if (x > player_x + 30.0 || x < 30.0 - player_x) && (y > player_y + 30.0 || y < player_y - 30.0) {
+                        break 'random;
+                    }
+                }
+                sprite.translation.x = x;
+                sprite.translation.y = y;
             }
         }
     }
-
-
-    // Remove the sprites.
-    for sprite_to_delete in &game_state.sprites_to_delete {
-        engine.sprites.remove(sprite_to_delete);
-    }
-    game_state.sprites_to_delete.drain(..);
 
     // Generate a new shot
     if shoot {
@@ -160,10 +215,55 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             SpritePreset::RollingBallRed,
         );
         sprite.scale = 0.1;
+        sprite.rotation = player_rotation;
         sprite.translation.x = player_x;
         sprite.translation.y = player_y;
-        sprite.rotation = player_rotation;
         sprite.collision = true;
         engine.audio_manager.play_sfx(SfxPreset::Impact1, 0.4);
     }
+
+    // deal with collisions
+    for event in engine.collision_events.drain(..) {
+        if event.pair.one_starts_with("player") {
+            if event.pair.either_starts_with("shot") {
+                continue;
+            } else if event.pair.either_starts_with("meteoroid") {
+                engine.audio_manager.play_sfx(SfxPreset::Impact3, 0.5);
+                game_over = true;
+                break;
+            }
+        } else if event.pair.one_starts_with("shot") && event.pair.one_starts_with("meteoroid"){
+            engine.audio_manager.play_sfx(SfxPreset::Impact2, 0.4);
+
+            // Remove any destroyed meteoroid from our "alive" list.
+            game_state.meteoroids.retain(|x| *x != event.pair.0);
+            game_state.meteoroids.retain(|x| *x != event.pair.1);
+
+            // Push the Sprites to be removed later.
+            game_state.sprites_to_delete.push(event.pair.0.clone());
+            game_state.sprites_to_delete.push(event.pair.1.clone());
+        }
+    }
+
+    // Remove the sprites.
+    for sprite_to_delete in &game_state.sprites_to_delete {
+        engine.sprites.remove(sprite_to_delete);
+    }
+    game_state.sprites_to_delete.drain(..);
+
+    // check for lost game
+    if game_over {
+        game_state.stop = true;
+        let game_over_text = engine.add_text("game_over", "Game Over");
+        game_over_text.font_size = 128.0;
+        engine.audio_manager.play_sfx(SfxPreset::Jingle3, 0.5);
+    }
+    // check for won game
+    if game_state.meteoroids.is_empty() {
+        game_state.stop = true;
+        let you_won_text = engine.add_text("you_won", "You Won!");
+        you_won_text.font_size = 128.0;
+        engine.audio_manager.play_sfx(SfxPreset::Jingle1, 0.5);
+    }
+
 }
