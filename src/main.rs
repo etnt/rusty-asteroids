@@ -1,11 +1,13 @@
 use bevy::prelude::Timer;
 use bevy::utils::Duration;
+use rand::{thread_rng, Rng};
 use rusty_engine::prelude::*;
 use std::f32::consts::TAU;
 const SHOT_SPEED: f32 = 200.0;
 const RELOAD_TIME: u64 = 150;
 const THRUST_TIME: u64 = 200;
 const THRUST_SPEED: f32 = 10.0;
+const METEOROID_SPEED: f32 = 50.0;
 
 struct GameState {
     shot_counter: u32,
@@ -31,6 +33,8 @@ fn main() {
     let mut game = Game::new();
 
     // game setup goes here
+    let delta_x = game.window_dimensions.x / 2.0;
+    let delta_y = game.window_dimensions.y / 2.0;
 
     //let player = game.add_sprite("player", "kenny/Retina/ship_A.png");
     let player = game.add_sprite("player", SpritePreset::RacingCarBlue);
@@ -38,6 +42,23 @@ fn main() {
     player.rotation = RIGHT;
     player.scale = 0.5;
     player.collision = true;
+
+    // add meteoroids
+    let meteoroids = vec![
+        SpritePreset::RollingBlockCorner,
+        SpritePreset::RollingBlockNarrow,
+        SpritePreset::RollingBlockSmall,
+        SpritePreset::RollingBlockSquare,
+    ];
+    for (i, meteoroid) in meteoroids.into_iter().enumerate() {
+        let sprite = game.add_sprite(format!("meteoroid{}", i), meteoroid);
+        sprite.layer = 5.0;
+        sprite.collision = true;
+        sprite.scale = thread_rng().gen_range(0.1..1.0);
+        sprite.rotation = thread_rng().gen_range(0.0..TAU);
+        sprite.translation.x = thread_rng().gen_range(-100.0..300.0);
+        sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
+    }
 
     game.add_logic(game_logic);
     game.run(GameState::default());
@@ -78,6 +99,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
 
     // Give thrust
     if give_thrust {
+        engine.audio_manager.play_sfx(SfxPreset::Forcefield2, 0.2);
         game_state.speed.x += THRUST_SPEED * (player_rotation as f64).cos() as f32;
         game_state.speed.y += THRUST_SPEED * (player_rotation as f64).sin() as f32;
     }
@@ -85,7 +107,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     player.translation.x += game_state.speed.x * engine.delta_f32;
     player.translation.y += game_state.speed.y * engine.delta_f32;
 
-    // Move the shots
+    // Move the shots and the meteoroids
     for sprite in engine.sprites.values_mut() {
         // bounds check
         if sprite.translation.y > 360.0
@@ -112,7 +134,17 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             sprite.translation.y +=
                 SHOT_SPEED * engine.delta_f32 * (sprite.rotation as f64).sin() as f32;
         }
+        if sprite.label.starts_with("meteoroid") {
+            sprite.translation.x += METEOROID_SPEED * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+            sprite.translation.y += METEOROID_SPEED * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+            // bounds check, out on left side -> new random position
+            if sprite.translation.x < -800.0 {
+                sprite.translation.x = thread_rng().gen_range(800.0..1600.0);
+                sprite.translation.y = thread_rng().gen_range(-300.0..300.0);
+            }
+        }
     }
+
 
     // Remove the sprites.
     for sprite_to_delete in &game_state.sprites_to_delete {
