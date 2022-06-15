@@ -72,3 +72,76 @@ in the same speed as before.
     player.translation.y += game_state.speed.y * engine.delta_f32;
 ```
 
+The Meteoroids was positioned randomly. Also, the scale, rotation
+(i.e the direction of movement), and the speed was randomly generated.
+
+``` rust
+    sprite.scale = thread_rng().gen_range(0.1..1.0);
+    sprite.rotation = thread_rng().gen_range(0.0..TAU);
+    ...
+    let speed = METEOROID_SPEED * thread_rng().gen_range(0.5..1.5) as f32;
+    sprite.translation.x += speed * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+    sprite.translation.y += speed * engine.delta_f32 * (sprite.rotation as f64).cos() as f32;
+```
+
+To avoid placing meteoroids on top of the Player position I looped
+until I got a position sufficiently far away. The friendly compiler
+(it is incredibly helpful) suggested a neat compact range test. 
+
+``` rust
+    'random: loop {
+        x = thread_rng().gen_range(game_state.min_x..game_state.max_x);
+        y = thread_rng().gen_range(game_state.min_y..game_state.max_y);
+        if !(-30.0..30.0).contains(&x) && !(-30.0..30.0).contains(&y) {
+            break 'random;
+        }
+    }
+```
+
+To get the Thrust and Shooting to behave smoothly I needed to slow down
+how fast they could react. This was done by making user of some `Timer`
+structs stored in the game state that count down every frame. When they
+reach zero it is ok to react to either a thrust, or shoot, command.
+
+``` rust
+    // As setup in the game state
+    shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
+    thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
+    ...
+    // Update the timers every frame
+    game_state.shot_timer.tick(engine.delta);
+    game_state.thrust_timer.tick(engine.delta);
+    ...
+    // Keyboard handling
+    if engine.keyboard_state.pressed(KeyCode::Space) && game_state.shot_timer.finished() {
+        shoot = true;
+        game_state.shot_timer.reset(); // restart the timer
+    }
+```
+
+
+The game is over when the Player collides with a Meteoroid and the 
+game is won when all meteoroids are destroyed. The latter gave me 
+some unexpected problems. I could not find an easy way to extract
+if one meteoroid had been shot. I ended up keeping a `Vec<String>`
+of the names of the meteoroid sprites. The final problem that
+took some time to figure out was how to remove the destroyed names
+from the Vector.
+
+``` rust
+    // deal with collisions
+    for event in engine.collision_events.drain(..) {
+        ...
+        
+        // Remove any destroyed meteoroid from our "alive" list.
+        game_state.meteoroids.retain(|x| *x != event.pair.0);
+        game_state.meteoroids.retain(|x| *x != event.pair.1);
+        ...
+    }
+    ...
+    // check for won game
+    if game_state.meteoroids.is_empty() {
+        ...
+    }
+```
+
