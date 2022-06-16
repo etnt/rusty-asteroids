@@ -14,6 +14,11 @@ After cloning, download the assets:
 then compile and run:
 
     cargo run
+    
+## Controls
+
+Shots are fired with `SPACE`, thrust is given with the `UP` key 
+and rotation is done by the `LEFT` and `RIGHT` key.
 
 ## Some notes
 
@@ -99,7 +104,7 @@ until I got a position sufficiently far away. The friendly compiler
 ```
 
 To get the Thrust and Shooting to behave smoothly I needed to slow down
-how fast they could react. This was done by making user of some `Timer`
+how fast they could react. This was done by making use of some `Timer`
 structs stored in the game state that count down every frame. When they
 reach zero it is ok to react to either a thrust, or shoot, command.
 
@@ -145,3 +150,6 @@ from the Vector.
     }
 ```
 
+To finish it off I made it possible to restart the game and to maintain
+a Best Time high score. This was a very fun exercise and it is quite addictive
+to play some `rusty-asteroids`... :-)
