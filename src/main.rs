@@ -10,8 +10,12 @@ const SEC_IN_MSEC: u64 = 1000;
 const THRUST_SPEED: f32 = 10.0;
 const METEOROID_SPEED: f32 = 50.0;
 
+type Seconds = u64;
+
 struct GameState {
     stop: bool,
+    high_score: Seconds,
+    start_time: Seconds,
     meteoroids: Vec<String>,
     shot_counter: u32,
     shot_timer: Timer,
@@ -29,6 +33,8 @@ impl Default for GameState {
     fn default() -> Self {
         Self {
             stop: false,
+            high_score: 0,
+            start_time: 0,
             meteoroids: Vec::new(),
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
@@ -63,6 +69,9 @@ fn main() {
     // Stop time
     let stop_time = game.add_text("stop_time", "Time: 00:00");
     stop_time.translation = Vec2::new(550.0, 320.0);
+    // Best Time
+    let best_time = game.add_text("best_time", "Best Time: 00:00");
+    best_time.translation = Vec2::new(-510.0, 320.0);
 
     let player = game.add_sprite("player", SpritePreset::RacingCarBlue);
     player.translation = Vec2::new(0.0, 0.0);
@@ -93,6 +102,8 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             engine.texts.remove("game_over");
             engine.texts.remove("restart");
             reset_player_position(engine);
+            // reset player speed
+            game_state.speed = Vec2::new(0.0, 0.0);
             reset_meteoroids(engine, game_state);
             reset_shots(engine);
             reset_stop_time(engine, game_state);
@@ -110,6 +121,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             game_state.shot_timer.reset();
             game_state.thrust_timer.reset();
             game_state.stop_timer.reset();
+            game_state.start_time = engine.time_since_startup.as_secs();
             game_state.stop = false;
         } else if engine.keyboard_state.pressed(KeyCode::Q) {
             engine.should_exit = true;
@@ -139,9 +151,9 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // Update the Timer
     if game_state.stop_timer.finished() {
         let stop_time = engine.texts.get_mut("stop_time").unwrap();
-        let secs = engine.time_since_startup.as_secs();
-        let min = secs / 60;
-        let secs = secs % 60;
+        let running_time = engine.time_since_startup.as_secs() - game_state.start_time;
+        let min = running_time / 60;
+        let secs = running_time % 60;
         stop_time.value = format!("Time: {:0>2}:{:0>2}", min, secs);
         game_state.stop_timer.reset();
     }
@@ -283,6 +295,17 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             let you_won_text = engine.add_text("game_over", "You Won!");
             you_won_text.font_size = 128.0;
             engine.audio_manager.play_sfx(SfxPreset::Jingle1, 0.5);
+
+            // Check for an improved finish time
+            let running_time = engine.time_since_startup.as_secs() - game_state.start_time;
+            println!("High Score: {}  ,  Running Time: {}", game_state.high_score, running_time);
+            if (game_state.high_score == 0) || (running_time < game_state.high_score) {
+                game_state.high_score = running_time;
+                let min = running_time / 60;
+                let secs = running_time % 60;
+                let best_time = engine.texts.get_mut("best_time").unwrap();
+                best_time.value = format!("Best Time: {:0>2}:{:0>2}", min, secs);
+            }
         }
         let restart_text = engine.add_text("restart", "press R to restart\npress Q or Esc to quit");
         restart_text.translation = Vec2::new(-30.0, -80.0);
