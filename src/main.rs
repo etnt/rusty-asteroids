@@ -2,7 +2,7 @@ use bevy::prelude::Timer;
 use bevy::utils::Duration;
 use rand::{thread_rng, Rng};
 use rusty_engine::prelude::*;
-use std::f32::consts::TAU;
+use std::{f32::consts::TAU};
 const SHOT_SPEED: f32 = 200.0;
 const RELOAD_TIME: u64 = 150;
 const THRUST_TIME: u64 = 200;
@@ -44,6 +44,7 @@ impl Default for GameState {
     }
 }
 
+
 fn main() {
     let mut game = Game::new();
 
@@ -69,42 +70,14 @@ fn main() {
     player.scale = 0.5;
     player.collision = true;
 
-    // add meteoroids
-    let meteoroids = vec![
-        SpritePreset::RollingBlockCorner,
-        SpritePreset::RollingBlockNarrow,
-        SpritePreset::RollingBlockSmall,
-        SpritePreset::RollingBlockSquare,
-        SpritePreset::RollingBlockCorner,
-        SpritePreset::RollingBlockNarrow,
-        SpritePreset::RollingBlockSmall,
-        SpritePreset::RollingBlockSquare,
-    ];
+    // Create all the Meteoroids
+    let meteoroids = meteoroids();
     for (i, meteoroid) in meteoroids.into_iter().enumerate() {
         let sprite = game.add_sprite(format!("meteoroid{}", i), meteoroid);
-        sprite.layer = 5.0;
-        sprite.collision = true;
-        sprite.scale = thread_rng().gen_range(0.1..1.0);
-        sprite.rotation = thread_rng().gen_range(0.0..TAU);
-
-        // Save the name of the Meteoroid so that we can keep
-        // track of when all of them are gone.
+        reset_meteoroid(sprite, &game_state);
+        // Save the name of the Meteoroid so that we can
+        // keep track of when all of them are gone.
         game_state.meteoroids.push(sprite.label.clone());
-
-        // Avoid starting too close to the player, so let's
-        // continue to generate a random position until it
-        // is enough far away from the Player.
-        let mut x = 0.0;
-        let mut y = 0.0;
-        'random: loop {
-            x = thread_rng().gen_range(game_state.min_x..game_state.max_x);
-            y = thread_rng().gen_range(game_state.min_y..game_state.max_y);
-            if !(-30.0..30.0).contains(&x) && !(-30.0..30.0).contains(&y) {
-                break 'random;
-            }
-        }
-        sprite.translation.x = x;
-        sprite.translation.y = y;
     }
 
     game.add_logic(game_logic);
@@ -115,6 +88,32 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // game logic goes here
 
     if game_state.stop {
+        // Handle potential restart of the game
+        if engine.keyboard_state.pressed(KeyCode::R) {
+            engine.texts.remove("game_over");
+            engine.texts.remove("restart");
+            reset_player_position(engine);
+            reset_meteoroids(engine, game_state);
+            reset_shots(engine);
+            reset_stop_time(engine, game_state);
+
+            // Generate new Meteoroids
+            let meteoroids = meteoroids();
+            for (i, meteoroid) in meteoroids.into_iter().enumerate() {
+                let sprite = engine.add_sprite(format!("meteoroid{}", i), meteoroid);
+                reset_meteoroid(sprite, game_state);
+                // Save the name of the Meteoroid so that we can
+                // keep track of when all of them are gone.
+                game_state.meteoroids.push(sprite.label.clone());
+            }
+            game_state.shot_counter = 0;
+            game_state.shot_timer.reset();
+            game_state.thrust_timer.reset();
+            game_state.stop_timer.reset();
+            game_state.stop = false;
+        } else if engine.keyboard_state.pressed(KeyCode::Q) {
+            engine.should_exit = true;
+        }
         return;
     }
 
@@ -184,7 +183,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
             || sprite.translation.x > 800.0
             || sprite.translation.x < -800.0
         {
-            // Explanation found in the `Car Shoot` scenario:
+            // Explanation found in the `Car Shoot` scenario description:
             //
             // We can't modify a hash map of sprites while we're
             // looping through its values, so let's create an
@@ -273,19 +272,89 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     }
     game_state.sprites_to_delete.drain(..);
 
-    // check for lost game
-    if game_over {
+    // check for lost/won game
+    if game_over || game_state.meteoroids.is_empty() {
         game_state.stop = true;
-        let game_over_text = engine.add_text("game_over", "Game Over");
-        game_over_text.font_size = 128.0;
-        engine.audio_manager.play_sfx(SfxPreset::Jingle3, 0.5);
-    }
-    // check for won game
-    if game_state.meteoroids.is_empty() {
-        game_state.stop = true;
-        let you_won_text = engine.add_text("you_won", "You Won!");
-        you_won_text.font_size = 128.0;
-        engine.audio_manager.play_sfx(SfxPreset::Jingle1, 0.5);
-    }
+        if game_over {
+            let game_over_text = engine.add_text("game_over", "You Lost!");
+            game_over_text.font_size = 128.0;
+            engine.audio_manager.play_sfx(SfxPreset::Jingle3, 0.5);
+        } else if game_state.meteoroids.is_empty() {
+            let you_won_text = engine.add_text("game_over", "You Won!");
+            you_won_text.font_size = 128.0;
+            engine.audio_manager.play_sfx(SfxPreset::Jingle1, 0.5);
+        }
+        let restart_text = engine.add_text("restart", "press R to restart\npress Q or Esc to quit");
+        restart_text.translation = Vec2::new(-30.0, -80.0);
+    };
 
+}
+
+
+fn reset_meteoroid(m: &mut Sprite, game_state: &GameState) {
+    m.layer = 5.0;
+    m.collision = true;
+    m.scale = thread_rng().gen_range(0.1..1.0);
+    m.rotation = thread_rng().gen_range(0.0..TAU);
+
+    // Avoid starting too close to the player, so let's
+    // continue to generate a random position until it
+    // is enough far away from the Player.
+    let mut x = 0.0;
+    let mut y = 0.0;
+    'random: loop {
+        x = thread_rng().gen_range(game_state.min_x..game_state.max_x);
+        y = thread_rng().gen_range(game_state.min_y..game_state.max_y);
+        if !(-30.0..30.0).contains(&x) && !(-30.0..30.0).contains(&y) {
+            break 'random;
+        }
+    }
+    m.translation.x = x;
+    m.translation.y = y;
+}
+
+fn meteoroids() -> Vec<SpritePreset> {
+    let meteoroids = vec![
+        SpritePreset::RollingBlockCorner,
+        SpritePreset::RollingBlockNarrow,
+        SpritePreset::RollingBlockSmall,
+        SpritePreset::RollingBlockSquare,
+        SpritePreset::RollingBlockCorner,
+        SpritePreset::RollingBlockNarrow,
+        SpritePreset::RollingBlockSmall,
+        SpritePreset::RollingBlockSquare,
+    ];
+    meteoroids
+}
+
+fn reset_player_position(engine: &mut Engine) {
+    let player = engine.sprites.get_mut("player").unwrap();
+    player.translation.x = 0.0;
+    player.translation.y = 0.0;
+    player.rotation = RIGHT;
+}
+
+fn reset_meteoroids(engine: &mut Engine, game_state: &mut GameState) {
+    for meteoroid in &game_state.meteoroids {
+        engine.sprites.remove(meteoroid);
+    }
+    game_state.meteoroids.drain(..);
+}
+
+fn reset_shots(engine: &mut Engine) {
+    let mut to_delete: Vec<String> = Vec::new();
+    for sprite in engine.sprites.values_mut() {
+        if sprite.label.starts_with("shot") {
+                to_delete.push(sprite.label.clone());
+        }
+    }
+    for s in &to_delete {
+        engine.sprites.remove(s);
+    }
+}
+
+fn reset_stop_time(engine: &mut Engine, game_state: &mut GameState) {
+    let stop_time = engine.texts.get_mut("stop_time").unwrap();
+    stop_time.value = format!("Time: {:0>2}:{:0>2}", 0, 0);
+    game_state.stop_timer.reset();
 }
