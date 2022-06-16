@@ -9,6 +9,7 @@ edition = "2021"
 rusty_engine = "5.0.6"
 rand = "0.8"
 
+
 [profile.dev]
 opt_level = 3
 debug = false

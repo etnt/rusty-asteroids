@@ -6,6 +6,7 @@ use std::f32::consts::TAU;
 const SHOT_SPEED: f32 = 200.0;
 const RELOAD_TIME: u64 = 150;
 const THRUST_TIME: u64 = 200;
+const SEC_IN_MSEC: u64 = 1000;
 const THRUST_SPEED: f32 = 10.0;
 const METEOROID_SPEED: f32 = 50.0;
 
@@ -15,6 +16,7 @@ struct GameState {
     shot_counter: u32,
     shot_timer: Timer,
     thrust_timer: Timer,
+    stop_timer: Timer,
     speed: Vec2,
     sprites_to_delete: Vec<String>,
     pub max_x: f32,
@@ -31,6 +33,7 @@ impl Default for GameState {
             shot_counter: 0,
             shot_timer: Timer::new(Duration::from_millis(RELOAD_TIME), false),
             thrust_timer: Timer::new(Duration::from_millis(THRUST_TIME), false),
+            stop_timer: Timer::new(Duration::from_millis(SEC_IN_MSEC), false),
             speed: Vec2::new(0.0, 0.0),
             sprites_to_delete: Vec::new(),
             max_x: 720.0,
@@ -55,6 +58,10 @@ fn main() {
         min_y: - height / 2.0,
         ..Default::default()
     };
+
+    // Stop time
+    let stop_time = game.add_text("stop_time", "Time: 00:00");
+    stop_time.translation = Vec2::new(550.0, 320.0);
 
     let player = game.add_sprite("player", SpritePreset::RacingCarBlue);
     player.translation = Vec2::new(0.0, 0.0);
@@ -120,6 +127,7 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     // Update the timers.
     game_state.shot_timer.tick(engine.delta);
     game_state.thrust_timer.tick(engine.delta);
+    game_state.stop_timer.tick(engine.delta);
 
     // Get hold of the Player info.
     let player = engine.sprites.get_mut("player").unwrap();
@@ -128,6 +136,16 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
     let player_rotation = player.rotation;
     let mut shoot = false;
     let mut give_thrust = false;
+
+    // Update the Timer
+    if game_state.stop_timer.finished() {
+        let stop_time = engine.texts.get_mut("stop_time").unwrap();
+        let secs = engine.time_since_startup.as_secs();
+        let min = secs / 60;
+        let secs = secs % 60;
+        stop_time.value = format!("Time: {:0>2}:{:0>2}", min, secs);
+        game_state.stop_timer.reset();
+    }
 
     // Keyboard handling
     if engine.keyboard_state.pressed(KeyCode::Space) && game_state.shot_timer.finished() {
@@ -224,6 +242,10 @@ fn game_logic(engine: &mut Engine, game_state: &mut GameState) {
 
     // deal with collisions
     for event in engine.collision_events.drain(..) {
+        // We only care about the start of collisions, not the ending of them.
+        if event.state.is_end() {
+            continue;
+        }
         if event.pair.one_starts_with("player") {
             if event.pair.either_starts_with("shot") {
                 continue;
